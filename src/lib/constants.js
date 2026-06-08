@@ -31,7 +31,7 @@ export const SERVICES = [
 ]
 
 export const FILING_STATUSES = [
-  'Documents Pending', 'Under Review', 'Under Processing', 'Filed', 'Completed',
+  'Documents Pending', 'Documents Received', 'Under Review', 'Under Processing', 'Filed', 'Completed',
 ]
 
 export const PAYMENT_STATUSES = ['Not Paid', 'Partially Paid', 'Fully Paid', 'Refunded']

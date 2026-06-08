@@ -1,28 +1,57 @@
 import { useEffect, useRef, useState } from 'react'
-import { Users, PhoneCall, UserCheck, TrendingUp, Clock, AlertTriangle, BarChart3, Calendar } from 'lucide-react'
+import { Users, PhoneCall, UserCheck, TrendingUp, Clock, BarChart3, Calendar, RefreshCw } from 'lucide-react'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { supabase } from '../../lib/supabase'
 import { useAuth } from '../../context/AuthContext'
 import { useStaggerAnimation } from '../../hooks/useAnimations'
 import { formatCurrency } from '../../lib/utils'
-import StatCard from '../../components/ui/StatCard'
 import LoadingSpinner from '../../components/ui/LoadingSpinner'
-import { LeadStatusBadge } from '../../components/ui/Badges'
+
+const KPI = [
+  { key: 'agentsOnline',    label: 'Agents Online',    icon: Users,      color: '#0F766E', bg: '#F0FDFA' },
+  { key: 'callsToday',      label: 'Calls Today',       icon: PhoneCall,  color: '#0A1628', bg: '#EFF6FF' },
+  { key: 'connected',       label: 'Connected',         icon: UserCheck,  color: '#C9A84C', bg: '#FFFBEB' },
+  { key: 'interested',      label: 'Interested',        icon: TrendingUp, color: '#A11D4A', bg: '#FFF1F2' },
+  { key: 'followupsDue',    label: 'Follow-Ups Due',    icon: Clock,      color: '#D97706', bg: '#FEF3C7' },
+  { key: 'totalLeads',      label: 'Total Leads',       icon: BarChart3,  color: '#2563EB', bg: '#EFF6FF' },
+  { key: 'totalClients',    label: 'Total Clients',     icon: UserCheck,  color: '#16A34A', bg: '#DCFCE7' },
+  { key: 'revenuePipeline', label: 'Revenue Pipeline',  icon: TrendingUp, color: '#7C3AED', bg: '#F5F3FF', prefix: '₹' },
+]
+
+function KpiCard({ kpi, value }) {
+  const Icon = kpi.icon
+  const display = kpi.prefix === '₹'
+    ? `₹${(value >= 100000 ? (value / 100000).toFixed(1) + 'L' : (value || 0).toLocaleString('en-IN'))}`
+    : (value || 0).toLocaleString()
+  return (
+    <div className="stat-card stagger-item">
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 14 }}>
+        <div style={{ width: 40, height: 40, borderRadius: 10, background: kpi.bg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <Icon size={18} style={{ color: kpi.color }} />
+        </div>
+      </div>
+      <p className="stat-card-value font-poppins">{display}</p>
+      <p className="stat-card-label" style={{ marginTop: 6 }}>{kpi.label}</p>
+    </div>
+  )
+}
 
 export default function SupervisorDashboard() {
   const { profile } = useAuth()
   const containerRef = useRef(null)
-  const [stats, setStats] = useState(null)
+  const [stats, setStats] = useState({})
   const [loading, setLoading] = useState(true)
   const [agents, setAgents] = useState([])
   const [followupsDue, setFollowupsDue] = useState([])
   const [callsData, setCallsData] = useState([])
+  const [refreshing, setRefreshing] = useState(false)
 
   useStaggerAnimation(containerRef)
-
   useEffect(() => { loadDashboard() }, [])
 
-  async function loadDashboard() {
+  async function loadDashboard(isRefresh = false) {
+    if (isRefresh) setRefreshing(true)
+    else setLoading(true)
     try {
       const today = new Date().toISOString().slice(0, 10)
       const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0)
@@ -40,21 +69,17 @@ export default function SupervisorDashboard() {
         supabase.from('clients').select('*', { count: 'exact', head: true }),
         supabase.from('users').select('id, name, role').eq('role', 'bpo_agent'),
         supabase.from('call_logs').select('call_status, interest_status, agent_id').gte('created_at', todayStart.toISOString()),
-        supabase.from('leads').select('id, client_name, mobile, status, next_followup_date').eq('next_followup_date', today).limit(5),
-        supabase.from('payments').select('final_amount, amount_paid, amount_due'),
+        supabase.from('leads').select('id, client_name, mobile, status, next_followup_date').eq('next_followup_date', today).limit(6),
+        supabase.from('payments').select('amount_due'),
         supabase.from('attendance').select('user_id').eq('date', today).is('logout_time', null),
       ])
 
       const connected = todayCalls?.filter(c => c.call_status === 'Connected').length || 0
       const interested = todayCalls?.filter(c => c.interest_status === 'Interested').length || 0
-      const pending = payments?.reduce((s, p) => s + (p.amount_due || 0), 0) || 0
+      const pipeline = payments?.reduce((s, p) => s + (p.amount_due || 0), 0) || 0
 
-      // Per-agent call count today
       const agentCallMap = {}
-      todayCalls?.forEach(c => {
-        agentCallMap[c.agent_id] = (agentCallMap[c.agent_id] || 0) + 1
-      })
-
+      todayCalls?.forEach(c => { agentCallMap[c.agent_id] = (agentCallMap[c.agent_id] || 0) + 1 })
       const agentsWithStats = (agentList || []).map(a => ({
         ...a,
         callsToday: agentCallMap[a.id] || 0,
@@ -62,20 +87,14 @@ export default function SupervisorDashboard() {
       }))
 
       setStats({
-        totalLeads: totalLeads || 0,
-        totalClients: totalClients || 0,
-        callsToday: todayCalls?.length || 0,
-        connected,
-        interested,
-        followupsDue: followups?.length || 0,
-        revenuePipeline: pending,
+        totalLeads: totalLeads || 0, totalClients: totalClients || 0,
+        callsToday: todayCalls?.length || 0, connected, interested,
+        followupsDue: followups?.length || 0, revenuePipeline: pipeline,
         agentsOnline: attendance?.length || 0,
       })
-
       setAgents(agentsWithStats)
       setFollowupsDue(followups || [])
 
-      // Build call status chart
       const statusMap = {}
       todayCalls?.forEach(c => { statusMap[c.call_status || 'Unknown'] = (statusMap[c.call_status || 'Unknown'] || 0) + 1 })
       setCallsData(Object.entries(statusMap).map(([name, count]) => ({ name, count })))
@@ -83,86 +102,99 @@ export default function SupervisorDashboard() {
       console.error(err)
     } finally {
       setLoading(false)
+      setRefreshing(false)
     }
   }
 
-  if (loading) return <div className="flex items-center justify-center h-64"><LoadingSpinner size="lg" text="Loading dashboard…" /></div>
+  if (loading) return <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 260 }}><LoadingSpinner size="lg" text="Loading dashboard…" /></div>
+
+  const STATUS_DOT = { Connected: '#16A34A', 'Not Connected': '#DC2626', Busy: '#D97706', 'Switched Off': '#64748B' }
 
   return (
     <div ref={containerRef}>
-      <div className="page-header stagger-item">
-        <h1 className="page-title">Supervisor Dashboard</h1>
-        <p className="page-subtitle">Team overview for {new Date().toLocaleDateString('en-IN', { weekday: 'long', day: '2-digit', month: 'long' })}</p>
+      {/* Header */}
+      <div className="page-header stagger-item" style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+        <div>
+          <p className="page-title">Supervisor Dashboard</p>
+          <p className="page-subtitle">Team overview · {new Date().toLocaleDateString('en-IN', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })}</p>
+        </div>
+        <button onClick={() => loadDashboard(true)} className="btn btn-outline btn-sm" disabled={refreshing}>
+          <RefreshCw size={13} className={refreshing ? 'animate-spin' : ''} /> Refresh
+        </button>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <StatCard title="Agents Online" value={stats.agentsOnline} icon={Users} color="green" />
-        <StatCard title="Calls Today" value={stats.callsToday} icon={PhoneCall} color="navy" />
-        <StatCard title="Connected" value={stats.connected} icon={UserCheck} color="gold" />
-        <StatCard title="Interested" value={stats.interested} icon={TrendingUp} color="burgundy" />
-        <StatCard title="Follow-Ups Due" value={stats.followupsDue} icon={Clock} color="orange" />
-        <StatCard title="Total Leads" value={stats.totalLeads} icon={Users} color="navy" />
-        <StatCard title="Total Clients" value={stats.totalClients} icon={UserCheck} color="gold" />
-        <StatCard title="Revenue Pipeline" value={stats.revenuePlugin} icon={TrendingUp} color="purple" prefix="₹" animate={false} />
+      {/* KPI Grid */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(190px,1fr))', gap: 14, marginBottom: 20 }}>
+        {KPI.map(kpi => <KpiCard key={kpi.key} kpi={kpi} value={stats[kpi.key]} />)}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 mb-6">
-        {/* Call Status Chart */}
-        <div className="table-container p-5 stagger-item lg:col-span-2">
-          <h3 className="text-sm font-bold text-[#0B1026] mb-4">Today's Call Status Breakdown</h3>
-          {callsData.length > 0 ? (
-            <ResponsiveContainer width="100%" height={200}>
-              <BarChart data={callsData} barSize={24}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-                <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #e2e8f0', fontSize: 12 }} />
-                <Bar dataKey="count" fill="#D4AF37" radius={[6, 6, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          ) : (
-            <div className="h-48 flex items-center justify-center text-slate-400 text-sm">No calls logged today</div>
-          )}
+      {/* Charts row */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: 14, marginBottom: 14 }}>
+        {/* Call Status Bar Chart */}
+        <div className="card stagger-item">
+          <div className="card-header">
+            <p className="card-title">Today's Call Status Breakdown</p>
+            <span style={{ fontSize: 11, color: '#94A3B8', fontWeight: 600, background: '#F5F7FA', padding: '3px 8px', borderRadius: 5 }}>Live</span>
+          </div>
+          <div className="card-body" style={{ paddingTop: 12 }}>
+            {callsData.length > 0 ? (
+              <ResponsiveContainer width="100%" height={200}>
+                <BarChart data={callsData} barSize={28}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" vertical={false} />
+                  <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#94A3B8' }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 11, fill: '#94A3B8' }} axisLine={false} tickLine={false} />
+                  <Tooltip contentStyle={{ borderRadius: 8, border: '1px solid #E2E8F0', fontSize: 12 }} />
+                  <Bar dataKey="count" fill="#C9A84C" radius={[6, 6, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div style={{ height: 200, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94A3B8', fontSize: 13 }}>No calls logged today</div>
+            )}
+          </div>
         </div>
 
         {/* Agent Performance */}
-        <div className="table-container p-5 stagger-item">
-          <h3 className="text-sm font-bold text-[#0B1026] mb-4">Agent Performance Today</h3>
-          <div className="space-y-3">
-            {agents.length > 0 ? agents.map(a => (
-              <div key={a.id} className="flex items-center justify-between p-3 rounded-xl" style={{ background: '#f8f9fc' }}>
-                <div className="flex items-center gap-2.5">
-                  <div className="w-7 h-7 rounded-full bg-[#0B1026] flex items-center justify-center text-[#D4AF37] text-xs font-bold">
+        <div className="card stagger-item">
+          <div className="card-header">
+            <p className="card-title">Agent Performance</p>
+            <span style={{ fontSize: 11, color: '#94A3B8' }}>Today</span>
+          </div>
+          <div style={{ padding: '8px 16px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {agents.length > 0 ? agents.slice(0, 6).map(a => (
+              <div key={a.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', borderRadius: 10, background: '#F8FAFC', border: '1px solid #F1F5F9' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{ width: 30, height: 30, borderRadius: '50%', background: '#0A1628', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#C9A84C', fontSize: 11, fontWeight: 800 }}>
                     {a.name?.charAt(0)}
                   </div>
                   <div>
-                    <p className="text-xs font-semibold text-[#0B1026]">{a.name}</p>
-                    <div className="flex items-center gap-1.5 mt-0.5">
-                      <span className={`w-1.5 h-1.5 rounded-full ${a.online ? 'bg-emerald-500' : 'bg-slate-300'}`} />
-                      <span className="text-xs text-slate-400">{a.online ? 'Online' : 'Offline'}</span>
+                    <p style={{ fontSize: 12, fontWeight: 700, color: '#0A1628' }}>{a.name}</p>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 2 }}>
+                      <span style={{ width: 6, height: 6, borderRadius: '50%', background: a.online ? '#16A34A' : '#CBD5E1', display: 'inline-block' }} />
+                      <span style={{ fontSize: 10, color: '#94A3B8' }}>{a.online ? 'Online' : 'Offline'}</span>
                     </div>
                   </div>
                 </div>
-                <div className="text-right">
-                  <p className="text-sm font-bold text-[#0B1026]">{a.callsToday}</p>
-                  <p className="text-xs text-slate-400">calls</p>
+                <div style={{ textAlign: 'right' }}>
+                  <p style={{ fontSize: 16, fontWeight: 800, color: '#0A1628', fontFamily: "'Poppins',sans-serif" }}>{a.callsToday}</p>
+                  <p style={{ fontSize: 10, color: '#94A3B8' }}>calls</p>
                 </div>
               </div>
             )) : (
-              <p className="text-slate-400 text-sm text-center py-6">No agents found</p>
+              <p style={{ color: '#94A3B8', fontSize: 13, textAlign: 'center', padding: '32px 0' }}>No agents found</p>
             )}
           </div>
         </div>
       </div>
 
-      {/* Follow-ups Due Today */}
+      {/* Follow-Ups Due Today */}
       <div className="table-container stagger-item">
-        <div className="flex items-center gap-2 p-4 border-b border-slate-100">
-          <Calendar size={16} className="text-[#A11D4A]" />
-          <h3 className="text-sm font-bold text-[#0B1026]">Follow-Ups Due Today</h3>
+        <div className="table-header">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Calendar size={16} style={{ color: '#A11D4A' }} />
+            <p className="table-title">Follow-Ups Due Today</p>
+          </div>
           {stats.followupsDue > 0 && (
-            <span className="ml-auto badge bg-red-100 text-red-600">{stats.followupsDue} due</span>
+            <span className="badge" style={{ background: '#FEE2E2', color: '#DC2626' }}>{stats.followupsDue} due</span>
           )}
         </div>
         <table className="data-table">
@@ -177,13 +209,13 @@ export default function SupervisorDashboard() {
           <tbody>
             {followupsDue.length > 0 ? followupsDue.map(l => (
               <tr key={l.id}>
-                <td className="font-medium">{l.client_name}</td>
-                <td>{l.mobile}</td>
-                <td><LeadStatusBadge status={l.status} /></td>
-                <td className="text-sm text-slate-500">{l.next_followup_date}</td>
+                <td style={{ fontWeight: 600 }}>{l.client_name}</td>
+                <td style={{ fontFamily: 'monospace', color: '#475569' }}>{l.mobile}</td>
+                <td><span className="badge" style={{ background: '#FEF3C7', color: '#92400E' }}>{l.status}</span></td>
+                <td style={{ color: '#64748B', fontSize: 12 }}>{l.next_followup_date}</td>
               </tr>
             )) : (
-              <tr><td colSpan={4} className="text-center py-8 text-slate-400">No follow-ups due today</td></tr>
+              <tr><td colSpan={4} style={{ textAlign: 'center', padding: '48px 0', color: '#94A3B8' }}>No follow-ups due today</td></tr>
             )}
           </tbody>
         </table>

@@ -8,7 +8,7 @@ create table if not exists users (
   email text unique not null,
   phone text,
   role text not null default 'bpo_agent' check (role in ('super_admin','supervisor','bpo_agent','auditor','accounts')),
-  status text default 'active' check (status in ('active','inactive')),
+  status text default 'active' check (status in ('active','inactive','suspended','banned')),
   created_at timestamptz default now()
 );
 
@@ -273,3 +273,9 @@ create index if not exists idx_filings_client on filings(client_id);
 create index if not exists idx_payments_client on payments(client_id);
 create index if not exists idx_attendance_user_date on attendance(user_id, date);
 create index if not exists idx_audit_logs_user on audit_logs(user_id);
+
+-- ── Migration: extend user status constraint ──────────────────
+-- Run this if you already have the users table created
+alter table users drop constraint if exists users_status_check;
+alter table users add constraint users_status_check
+  check (status in ('active','inactive','suspended','banned'));

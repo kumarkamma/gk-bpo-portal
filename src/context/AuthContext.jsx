@@ -32,6 +32,23 @@ export function AuthProvider({ children }) {
 
   async function signIn(email, password) {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password })
+    if (error) return { data, error }
+    if (data?.user) {
+      const { data: profileData } = await supabase.from('users').select('*').eq('id', data.user.id).single()
+      if (profileData?.status === 'banned') {
+        await supabase.auth.signOut()
+        return { data: null, error: { message: 'Your account has been permanently banned. Contact your administrator.' } }
+      }
+      if (profileData?.status === 'suspended') {
+        await supabase.auth.signOut()
+        return { data: null, error: { message: 'Your account is suspended. Contact your administrator.' } }
+      }
+      if (profileData?.status === 'inactive') {
+        await supabase.auth.signOut()
+        return { data: null, error: { message: 'Your account is deactivated. Contact your administrator.' } }
+      }
+      setProfile(profileData)
+    }
     return { data, error }
   }
 

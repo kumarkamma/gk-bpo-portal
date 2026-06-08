@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState } from 'react'
 import Sidebar from './Sidebar'
 import Topbar from './Topbar'
 import { useLenis } from '../../hooks/useAnimations'
@@ -8,11 +8,11 @@ export default function AppLayout({ children }) {
   useLenis()
 
   return (
-    <div className="flex h-screen overflow-hidden bg-[#F8F9FC]">
+    <div style={{ display: 'flex', height: '100vh', overflow: 'hidden', background: '#F4F6FA' }}>
       <Sidebar collapsed={collapsed} onToggle={() => setCollapsed(p => !p)} />
-      <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
+      <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0, overflow: 'hidden' }}>
         <Topbar onMenuToggle={() => setCollapsed(p => !p)} />
-        <main className="flex-1 overflow-y-auto p-5 lg:p-6">
+        <main style={{ flex: 1, overflowY: 'auto', padding: '20px 24px' }}>
           {children}
         </main>
       </div>

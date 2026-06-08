@@ -1,44 +1,55 @@
 import { useRef } from 'react'
 import { useCountAnimation } from '../../hooks/useAnimations'
+import { ArrowUpRight } from 'lucide-react'
 
-export default function StatCard({ title, value, icon: Icon, color = 'gold', trend, prefix = '', suffix = '', animate = true }) {
+const COLOR_MAP = {
+  navy:    { icon: '#2563EB', bg: '#EFF6FF' },
+  gold:    { icon: '#D4AF37', bg: '#FFFBEB' },
+  burgundy:{ icon: '#A11D4A', bg: '#FFF1F2' },
+  green:   { icon: '#16A34A', bg: '#DCFCE7' },
+  orange:  { icon: '#D97706', bg: '#FEF3C7' },
+  purple:  { icon: '#7C3AED', bg: '#F5F3FF' },
+  teal:    { icon: '#0F766E', bg: '#F0FDFA' },
+  red:     { icon: '#DC2626', bg: '#FEE2E2' },
+}
+
+export default function StatCard({ title, value, icon: Icon, color = 'navy', prefix = '', suffix = '', animate = true, delta }) {
   const countRef = useRef(null)
-  const numericValue = typeof value === 'number' ? value : parseFloat(value) || 0
+  const numVal = typeof value === 'number' ? value : parseFloat(value) || 0
+  const c = COLOR_MAP[color] || COLOR_MAP.navy
 
-  useCountAnimation(animate ? countRef : { current: null }, numericValue)
+  useCountAnimation(animate ? countRef : { current: null }, numVal)
 
-  const colorMap = {
-    gold: { bg: 'bg-amber-50', icon: 'text-[#D4AF37]', border: 'border-amber-100' },
-    burgundy: { bg: 'bg-rose-50', icon: 'text-[#A11D4A]', border: 'border-rose-100' },
-    navy: { bg: 'bg-indigo-50', icon: 'text-[#0B1026]', border: 'border-indigo-100' },
-    green: { bg: 'bg-emerald-50', icon: 'text-emerald-600', border: 'border-emerald-100' },
-    orange: { bg: 'bg-orange-50', icon: 'text-orange-600', border: 'border-orange-100' },
-    purple: { bg: 'bg-purple-50', icon: 'text-purple-600', border: 'border-purple-100' },
-  }
-  const c = colorMap[color] || colorMap.gold
+  const displayValue = prefix === '₹'
+    ? `₹${numVal >= 100000 ? (numVal / 100000).toFixed(1) + 'L' : numVal.toLocaleString('en-IN')}`
+    : `${prefix}${animate ? '' : numVal.toLocaleString()}${suffix}`
 
   return (
     <div className="stat-card stagger-item">
-      <div className="flex items-start justify-between">
-        <div className="flex-1 min-w-0">
-          <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider truncate">{title}</p>
-          <p className="mt-2 text-2xl font-bold text-[#0B1026]">
-            {prefix}
-            <span ref={countRef}>{animate ? '0' : numericValue.toLocaleString()}</span>
-            {suffix}
-          </p>
-          {trend && (
-            <p className={`mt-1 text-xs font-medium ${trend.up ? 'text-emerald-600' : 'text-red-500'}`}>
-              {trend.up ? '↑' : '↓'} {trend.value} {trend.label}
-            </p>
-          )}
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 14 }}>
+        <div style={{ width: 40, height: 40, borderRadius: 10, background: c.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          {Icon && <Icon size={18} style={{ color: c.icon }} />}
         </div>
-        {Icon && (
-          <div className={`p-2.5 rounded-xl ${c.bg} border ${c.border} ml-3 shrink-0`}>
-            <Icon size={20} className={c.icon} />
-          </div>
-        )}
+        <ArrowUpRight size={13} style={{ color: '#E2E8F0' }} />
       </div>
+      <p className="stat-card-label">{title}</p>
+      <p className="stat-card-value font-poppins">
+        {prefix === '₹' ? (
+          animate ? displayValue : displayValue
+        ) : (
+          <>
+            {prefix}
+            <span ref={countRef}>{animate ? '0' : numVal.toLocaleString()}</span>
+            {suffix}
+          </>
+        )}
+      </p>
+      {delta && (
+        <div className={`stat-card-delta ${delta.up ? 'up' : 'down'}`} style={{ marginTop: 8 }}>
+          {delta.up ? '↑' : '↓'} {delta.value}
+          <span style={{ fontWeight: 400, color: '#94A3B8', marginLeft: 2 }}>{delta.label}</span>
+        </div>
+      )}
     </div>
   )
 }
