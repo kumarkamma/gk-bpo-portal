@@ -2,6 +2,7 @@ import { Routes, Route, Navigate } from 'react-router-dom'
 import { useAuth } from './context/AuthContext'
 
 import AppLayout from './components/layout/AppLayout'
+import ProtectedRoute from './components/ProtectedRoute'
 import LoginPage from './pages/LoginPage'
 
 import AdminDashboard from './pages/admin/Dashboard'
@@ -24,33 +25,30 @@ import UsersPage from './pages/admin/UsersPage'
 import FollowUpsPage from './pages/admin/FollowUpsPage'
 import ProfilePage from './pages/ProfilePage'
 
+// All 5 active roles
+const ALL_ROLES = ['super_admin', 'supervisor', 'bpo_agent', 'auditor', 'accounts']
+const ADMIN_ROLES = ['super_admin', 'supervisor']
+const FINANCE_ROLES = ['super_admin', 'accounts']
+const FILING_ROLES = ['super_admin', 'auditor']
+const LEADS_ROLES = ['super_admin', 'supervisor', 'bpo_agent']
+
 const ROLE_DASHBOARD = {
   super_admin: '/super-admin',
-  _admin_legacy: '/dashboard',
   supervisor: '/supervisor-dashboard',
   bpo_agent: '/agent-dashboard',
   auditor: '/auditor-dashboard',
   accounts: '/accounts-dashboard',
 }
 
-const ROLE_DASHBOARD_COMPONENT = {
-  super_admin: SuperAdminDashboard,
-  _admin_legacy: AdminDashboard,
-  supervisor: SupervisorDashboard,
-  bpo_agent: AgentDashboard,
-  auditor: AuditorDashboard,
-  accounts: AccountsDashboard,
-}
-
 function RoleRedirect() {
   const { profile, loading } = useAuth()
   if (loading) return null
   if (!profile) return <Navigate to="/login" replace />
-  const dest = ROLE_DASHBOARD[profile.role] || '/dashboard'
-  return <Navigate to={dest} replace />
+  return <Navigate to={ROLE_DASHBOARD[profile.role] || '/dashboard'} replace />
 }
 
-function WrappedPage({ component: Component }) {
+// ⚠️ DEV MODE — ProtectedRoute disabled for testing, re-enable before production
+function Page({ component: Component }) {
   return (
     <AppLayout>
       <Component />
@@ -58,39 +56,42 @@ function WrappedPage({ component: Component }) {
   )
 }
 
-function RoleDashboard({ role }) {
-  const Component = ROLE_DASHBOARD_COMPONENT[role] || AdminDashboard
-  return <WrappedPage component={Component} />
-}
-
 export default function AppRoutes() {
   return (
     <Routes>
-      <Route path="/" element={<RoleRedirect />} />
+      {/* Public */}
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/" element={<RoleRedirect />} />
 
-      {/* Role-based dashboards */}
-      <Route path="/super-admin" element={<WrappedPage component={SuperAdminDashboard} />} />
-      <Route path="/dashboard" element={<WrappedPage component={AdminDashboard} />} />
-      <Route path="/supervisor-dashboard" element={<RoleDashboard role="supervisor" />} />
-      <Route path="/agent-dashboard" element={<RoleDashboard role="bpo_agent" />} />
-      <Route path="/auditor-dashboard" element={<RoleDashboard role="auditor" />} />
-      <Route path="/accounts-dashboard" element={<RoleDashboard role="accounts" />} />
+      {/* ── Dashboards ── */}
+      <Route path="/super-admin"         element={<Page component={SuperAdminDashboard} roles={['super_admin']} />} />
+      <Route path="/dashboard"           element={<Page component={AdminDashboard}      roles={['super_admin']} />} />
+      <Route path="/supervisor-dashboard"element={<Page component={SupervisorDashboard} roles={['super_admin', 'supervisor']} />} />
+      <Route path="/agent-dashboard"     element={<Page component={AgentDashboard}      roles={['super_admin', 'bpo_agent']} />} />
+      <Route path="/auditor-dashboard"   element={<Page component={AuditorDashboard}    roles={['super_admin', 'auditor']} />} />
+      <Route path="/accounts-dashboard"  element={<Page component={AccountsDashboard}   roles={['super_admin', 'accounts']} />} />
 
-      {/* Shared pages */}
-      <Route path="/leads"         element={<WrappedPage component={LeadsPage} />} />
-      <Route path="/clients"       element={<WrappedPage component={ClientsPage} />} />
-      <Route path="/calls"         element={<WrappedPage component={CallLogsPage} />} />
-      <Route path="/followups"     element={<WrappedPage component={FollowUpsPage} />} />
-      <Route path="/filings"       element={<WrappedPage component={FilingsPage} />} />
-      <Route path="/payments"      element={<WrappedPage component={PaymentsPage} />} />
-      <Route path="/attendance"    element={<WrappedPage component={AttendancePage} />} />
-      <Route path="/reports"       element={<WrappedPage component={ReportsPage} />} />
-      <Route path="/import-export" element={<WrappedPage component={ImportExportPage} />} />
-      <Route path="/audit-logs"    element={<WrappedPage component={AuditLogsPage} />} />
-      <Route path="/users"         element={<WrappedPage component={UsersPage} />} />
-      <Route path="/profile"       element={<WrappedPage component={ProfilePage} />} />
+      {/* ── Operations ── */}
+      <Route path="/leads"         element={<Page component={LeadsPage}     roles={LEADS_ROLES} />} />
+      <Route path="/clients"       element={<Page component={ClientsPage}   roles={[...ADMIN_ROLES, 'auditor', 'accounts']} />} />
+      <Route path="/calls"         element={<Page component={CallLogsPage}  roles={LEADS_ROLES} />} />
+      <Route path="/followups"     element={<Page component={FollowUpsPage} roles={LEADS_ROLES} />} />
 
+      {/* ── Finance ── */}
+      <Route path="/filings"  element={<Page component={FilingsPage}  roles={[...FILING_ROLES, 'supervisor']} />} />
+      <Route path="/payments" element={<Page component={PaymentsPage} roles={[...FINANCE_ROLES, 'supervisor']} />} />
+
+      {/* ── Management ── */}
+      <Route path="/attendance"    element={<Page component={AttendancePage}   roles={ALL_ROLES} />} />
+      <Route path="/reports"       element={<Page component={ReportsPage}      roles={ALL_ROLES} />} />
+      <Route path="/import-export" element={<Page component={ImportExportPage} roles={['super_admin', 'supervisor']} />} />
+      <Route path="/audit-logs"    element={<Page component={AuditLogsPage}    roles={['super_admin']} />} />
+      <Route path="/users"         element={<Page component={UsersPage}        roles={['super_admin']} />} />
+
+      {/* ── Account ── */}
+      <Route path="/profile" element={<Page component={ProfilePage} roles={ALL_ROLES} />} />
+
+      {/* Catch-all */}
       <Route path="*" element={<RoleRedirect />} />
     </Routes>
   )

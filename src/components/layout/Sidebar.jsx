@@ -1,4 +1,4 @@
-import { NavLink, useNavigate } from 'react-router-dom'
+import { NavLink, useNavigate, useLocation } from 'react-router-dom'
 import {
   LayoutDashboard, Users, PhoneCall, UserCheck, FileText, CreditCard,
   BarChart3, Upload, LogOut, Shield, UserCog, ClipboardList,
@@ -68,6 +68,13 @@ const NAV_CONFIG = {
       ],
     },
     {
+      section: 'FINANCE',
+      items: [
+        { label: 'ITR Filings',     icon: FileText,      path: '/filings' },
+        { label: 'Payments',        icon: CreditCard,    path: '/payments' },
+      ],
+    },
+    {
       section: 'TEAM',
       items: [
         { label: 'Attendance',      icon: Calendar,      path: '/attendance' },
@@ -92,6 +99,7 @@ const NAV_CONFIG = {
       section: 'MY WORK',
       items: [
         { label: 'My Leads',        icon: Target,        path: '/leads' },
+        { label: 'My Clients',      icon: UserCheck,     path: '/clients' },
         { label: 'Call Logs',       icon: PhoneCall,     path: '/calls' },
         { label: 'Follow-Ups',      icon: ClipboardList, path: '/followups' },
       ],
@@ -161,12 +169,19 @@ const NAV_CONFIG = {
       items: [
         { label: 'Payments',        icon: CreditCard,    path: '/payments' },
         { label: 'Clients',         icon: UserCheck,     path: '/clients' },
+        { label: 'ITR Filings',     icon: FileText,      path: '/filings' },
       ],
     },
     {
       section: 'REPORTS',
       items: [
         { label: 'Financial Reports', icon: TrendingUp,  path: '/reports' },
+      ],
+    },
+    {
+      section: 'ATTENDANCE',
+      items: [
+        { label: 'My Attendance',   icon: Calendar,      path: '/attendance' },
       ],
     },
     {
@@ -189,8 +204,18 @@ const ROLE_LABELS = {
 export default function Sidebar({ collapsed, onToggle }) {
   const { profile, signOut } = useAuth()
   const navigate = useNavigate()
-  const role = profile?.role || ROLES.BPO_AGENT
-  const sections = NAV_CONFIG[role] || NAV_CONFIG[ROLES.BPO_AGENT]
+  const { pathname } = useLocation()
+
+  // DEV: detect role from current URL path so manual navigation works without login
+  let devRole = null
+  if (pathname.startsWith('/super-admin') || pathname.startsWith('/dashboard'))  devRole = ROLES.SUPER_ADMIN
+  else if (pathname.startsWith('/supervisor'))  devRole = ROLES.SUPERVISOR
+  else if (pathname.startsWith('/agent'))       devRole = ROLES.BPO_AGENT
+  else if (pathname.startsWith('/auditor'))     devRole = ROLES.AUDITOR
+  else if (pathname.startsWith('/accounts'))    devRole = ROLES.ACCOUNTS
+
+  const role = profile?.role || devRole || ROLES.SUPER_ADMIN
+  const sections = NAV_CONFIG[role] || NAV_CONFIG[ROLES.SUPER_ADMIN]
 
   async function handleSignOut() {
     await signOut()

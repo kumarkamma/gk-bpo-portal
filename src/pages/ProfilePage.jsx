@@ -38,7 +38,7 @@ const ROLE_STYLE = {
 }
 
 export default function ProfilePage() {
-  const { profile } = useAuth()
+  const { profile, refreshProfile } = useAuth()
   const [profileSaved, setProfileSaved] = useState(false)
   const [profileError, setProfileError] = useState('')
   const [pwSaved, setPwSaved] = useState(false)
@@ -64,6 +64,7 @@ export default function ProfilePage() {
       phone: values.phone || null,
     }).eq('id', profile.id)
     if (error) { setProfileError(error.message); return }
+    await refreshProfile()   // update sidebar/topbar immediately
     setProfileSaved(true)
     setTimeout(() => setProfileSaved(false), 3000)
   }
