@@ -57,6 +57,12 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
+
+/* Smooth scroll on ALL scrollable containers */
+* {
+  scroll-behavior: smooth;
+  -webkit-overflow-scrolling: touch;
+}
 h1, h2, h3, h4, h5, h6 { font-family: 'Poppins', sans-serif; }
 
 /* ─── SELECTION ──────────────────────────────────────────────── */

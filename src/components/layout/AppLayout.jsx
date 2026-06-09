@@ -1,14 +1,12 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import Sidebar from './Sidebar'
 import Topbar from './Topbar'
-import { useLenis } from '../../hooks/useAnimations'
 import { ChevronDown } from 'lucide-react'
 
 export default function AppLayout({ children }) {
   const [collapsed, setCollapsed] = useState(false)
   const [showScroll, setShowScroll] = useState(false)
   const mainRef = useRef(null)
-  useLenis()
 
   // Show arrow only when there's more content below
   const handleScroll = useCallback(() => {
@@ -41,7 +39,7 @@ export default function AppLayout({ children }) {
       <Sidebar collapsed={collapsed} onToggle={() => setCollapsed(p => !p)} />
       <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0, overflow: 'hidden', position: 'relative' }}>
         <Topbar onMenuToggle={() => setCollapsed(p => !p)} />
-        <main ref={mainRef} style={{ flex: 1, overflowY: 'auto', padding: '20px 24px' }}>
+        <main ref={mainRef} style={{ flex: 1, overflowY: 'auto', padding: '20px 24px', scrollBehavior: 'smooth' }}>
           {children}
         </main>
 

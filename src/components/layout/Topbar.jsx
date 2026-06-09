@@ -23,6 +23,8 @@ const PAGE_NAMES = {
   '/audit-logs':           'Audit Logs',
   '/users':                'User Management',
   '/profile':              'My Profile',
+  '/privacy-policy':       'Privacy & Policy',
+  '/consent-monitor':      'Consent Monitor',
 }
 
 const ROLE_LABELS = {

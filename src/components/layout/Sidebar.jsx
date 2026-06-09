@@ -1,9 +1,11 @@
+import { useEffect, useRef } from 'react'
 import { NavLink, useNavigate, useLocation } from 'react-router-dom'
+import { gsap } from 'gsap'
 import {
   LayoutDashboard, Users, PhoneCall, UserCheck, FileText, CreditCard,
   BarChart3, Upload, LogOut, Shield, UserCog, ClipboardList,
   Calendar, ChevronLeft, ChevronRight, User, TrendingUp,
-  BookOpen, Briefcase, Target, Crown
+  BookOpen, Briefcase, Target, Crown, ScrollText
 } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 import { ROLES } from '../../lib/constants'
@@ -42,12 +44,14 @@ const NAV_CONFIG = {
         { label: 'Import / Export', icon: Upload,        path: '/import-export' },
         { label: 'Audit Logs',      icon: Shield,        path: '/audit-logs' },
         { label: 'User Management', icon: UserCog,       path: '/users' },
+        { label: 'Consent Monitor', icon: ScrollText,    path: '/consent-monitor' },
       ],
     },
     {
       section: 'ACCOUNT',
       items: [
-        { label: 'My Profile',      icon: User,          path: '/profile' },
+        { label: 'My Profile',      icon: User,       path: '/profile' },
+        { label: 'Privacy & Policy',icon: ScrollText, path: '/privacy-policy' },
       ],
     },
   ],
@@ -84,7 +88,8 @@ const NAV_CONFIG = {
     {
       section: 'ACCOUNT',
       items: [
-        { label: 'My Profile',      icon: User,          path: '/profile' },
+        { label: 'My Profile',      icon: User,       path: '/profile' },
+        { label: 'Privacy & Policy',icon: ScrollText, path: '/privacy-policy' },
       ],
     },
   ],
@@ -119,7 +124,8 @@ const NAV_CONFIG = {
     {
       section: 'ACCOUNT',
       items: [
-        { label: 'My Profile',      icon: User,          path: '/profile' },
+        { label: 'My Profile',      icon: User,       path: '/profile' },
+        { label: 'Privacy & Policy',icon: ScrollText, path: '/privacy-policy' },
       ],
     },
   ],
@@ -153,7 +159,8 @@ const NAV_CONFIG = {
     {
       section: 'ACCOUNT',
       items: [
-        { label: 'My Profile',      icon: User,          path: '/profile' },
+        { label: 'My Profile',      icon: User,       path: '/profile' },
+        { label: 'Privacy & Policy',icon: ScrollText, path: '/privacy-policy' },
       ],
     },
   ],
@@ -187,7 +194,8 @@ const NAV_CONFIG = {
     {
       section: 'ACCOUNT',
       items: [
-        { label: 'My Profile',      icon: User,          path: '/profile' },
+        { label: 'My Profile',      icon: User,       path: '/profile' },
+        { label: 'Privacy & Policy',icon: ScrollText, path: '/privacy-policy' },
       ],
     },
   ],
@@ -206,18 +214,62 @@ export default function Sidebar({ collapsed, onToggle }) {
   const navigate = useNavigate()
   const { pathname } = useLocation()
 
-  // DEV: detect role from current URL path so manual navigation works without login
-  let devRole = null
-  if (pathname.startsWith('/super-admin') || pathname.startsWith('/dashboard'))  devRole = ROLES.SUPER_ADMIN
-  else if (pathname.startsWith('/supervisor'))  devRole = ROLES.SUPERVISOR
-  else if (pathname.startsWith('/agent'))       devRole = ROLES.BPO_AGENT
-  else if (pathname.startsWith('/auditor'))     devRole = ROLES.AUDITOR
-  else if (pathname.startsWith('/accounts'))    devRole = ROLES.ACCOUNTS
+  // Determine role: real profile > URL detection > super_admin default
+  // We deliberately do NOT use localStorage here — it caused stale role bugs
+  const finalRole = (() => {
+    if (profile?.role) return profile.role
+    // Detect from current URL — covers both dashboard URLs and shared pages
+    // when navigated from a role dashboard in dev mode
+    if (pathname.startsWith('/super-admin') || pathname.startsWith('/dashboard'))   return ROLES.SUPER_ADMIN
+    if (pathname.startsWith('/supervisor-dashboard'))  return ROLES.SUPERVISOR
+    if (pathname.startsWith('/agent-dashboard'))       return ROLES.BPO_AGENT
+    if (pathname.startsWith('/auditor-dashboard'))     return ROLES.AUDITOR
+    if (pathname.startsWith('/accounts-dashboard'))    return ROLES.ACCOUNTS
+    // For shared pages, check document.referrer or sessionStorage set when entering a role dashboard
+    const sessionRole = sessionStorage.getItem('gk_active_role')
+    if (sessionRole) return sessionRole
+    return ROLES.SUPER_ADMIN
+  })()
 
-  const role = profile?.role || devRole || ROLES.SUPER_ADMIN
-  const sections = NAV_CONFIG[role] || NAV_CONFIG[ROLES.SUPER_ADMIN]
+  // When entering a role dashboard, save to sessionStorage so shared pages keep the same sidebar
+  useEffect(() => {
+    if (profile?.role) {
+      sessionStorage.setItem('gk_active_role', profile.role)
+      return
+    }
+    if (pathname.startsWith('/supervisor-dashboard'))  sessionStorage.setItem('gk_active_role', ROLES.SUPERVISOR)
+    else if (pathname.startsWith('/agent-dashboard'))  sessionStorage.setItem('gk_active_role', ROLES.BPO_AGENT)
+    else if (pathname.startsWith('/auditor-dashboard'))sessionStorage.setItem('gk_active_role', ROLES.AUDITOR)
+    else if (pathname.startsWith('/accounts-dashboard'))sessionStorage.setItem('gk_active_role', ROLES.ACCOUNTS)
+    else if (pathname.startsWith('/super-admin') || pathname.startsWith('/dashboard')) sessionStorage.setItem('gk_active_role', ROLES.SUPER_ADMIN)
+  }, [pathname, profile?.role])
+
+  const sections = NAV_CONFIG[finalRole] || NAV_CONFIG[ROLES.SUPER_ADMIN]
+
+  // Dashboard home path per role — logo click goes here
+  const ROLE_HOME = {
+    super_admin: '/super-admin',
+    supervisor:  '/supervisor-dashboard',
+    bpo_agent:   '/agent-dashboard',
+    auditor:     '/auditor-dashboard',
+    accounts:    '/accounts-dashboard',
+  }
+  const homePath = ROLE_HOME[finalRole] || '/super-admin'
+
+  // Logo slide-in animation on mount/refresh
+  const logoRef = useRef(null)
+  useEffect(() => {
+    if (!logoRef.current) return
+    gsap.fromTo(
+      logoRef.current,
+      { x: -60, opacity: 0 },
+      { x: 0, opacity: 1, duration: 0.7, ease: 'power3.out', delay: 0.05 }
+    )
+  }, []) // runs once on mount = page load / refresh
 
   async function handleSignOut() {
+    sessionStorage.removeItem('gk_active_role')
+    localStorage.removeItem('gk_dev_role')
     await signOut()
     navigate('/login', { replace: true })
   }
@@ -235,15 +287,24 @@ export default function Sidebar({ collapsed, onToggle }) {
       position: 'relative',
     }}>
 
-      {/* ── LOGO ── */}
-      <div style={{
-        display: 'flex', alignItems: 'center',
-        gap: collapsed ? 0 : 10,
-        padding: collapsed ? '10px 0' : '12px 14px',
-        justifyContent: collapsed ? 'center' : 'flex-start',
-        borderBottom: '1px solid rgba(255,255,255,0.07)',
-        minHeight: 66, flexShrink: 0,
-      }}>
+      {/* ── LOGO — click goes to dashboard, slides in on mount ── */}
+      <div
+        ref={logoRef}
+        onClick={() => navigate(homePath)}
+        title="Go to Dashboard"
+        style={{
+          display: 'flex', alignItems: 'center',
+          gap: collapsed ? 0 : 10,
+          padding: collapsed ? '10px 0' : '12px 14px',
+          justifyContent: collapsed ? 'center' : 'flex-start',
+          borderBottom: '1px solid rgba(255,255,255,0.07)',
+          minHeight: 66, flexShrink: 0,
+          cursor: 'pointer',
+          transition: 'background 0.2s',
+        }}
+        onMouseEnter={e => e.currentTarget.style.background = 'rgba(200,169,107,0.06)'}
+        onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+      >
         <img
           src="/mylogo.jpeg"
           alt="GK Tax Solutions"

@@ -1,8 +1,8 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { User, Mail, Phone, Shield, Key, Save, Eye, EyeOff, CheckCircle, AlertCircle, Lock } from 'lucide-react'
+import { User, Mail, Phone, Shield, Key, Save, Eye, EyeOff, CheckCircle, AlertCircle, Lock, Camera, Upload } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { supabase } from '../lib/supabase'
 import { getInitials } from '../lib/utils'
@@ -46,6 +46,10 @@ export default function ProfilePage() {
   const [showCurrent, setShowCurrent] = useState(false)
   const [showNew, setShowNew] = useState(false)
   const [showConfirm, setShowConfirm] = useState(false)
+  const [avatarUrl, setAvatarUrl] = useState(profile?.avatar_url || null)
+  const [uploading, setUploading] = useState(false)
+  const [uploadError, setUploadError] = useState('')
+  const fileRef = useRef(null)
 
   const rs = ROLE_STYLE[profile?.role] || { bg: '#F1F5F9', color: '#64748B', border: '#E2E8F0' }
 
@@ -64,9 +68,27 @@ export default function ProfilePage() {
       phone: values.phone || null,
     }).eq('id', profile.id)
     if (error) { setProfileError(error.message); return }
-    await refreshProfile()   // update sidebar/topbar immediately
+    await refreshProfile()
     setProfileSaved(true)
     setTimeout(() => setProfileSaved(false), 3000)
+  }
+
+  async function handleAvatarUpload(e) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    if (file.size > 2 * 1024 * 1024) { setUploadError('Image must be under 2MB'); return }
+    if (!file.type.startsWith('image/')) { setUploadError('Please select an image file'); return }
+    setUploading(true)
+    setUploadError('')
+    const ext = file.name.split('.').pop()
+    const path = `avatars/${profile.id}.${ext}`
+    const { error: upErr } = await supabase.storage.from('avatars').upload(path, file, { upsert: true })
+    if (upErr) { setUploadError(upErr.message); setUploading(false); return }
+    const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(path)
+    await supabase.from('users').update({ avatar_url: publicUrl }).eq('id', profile.id)
+    setAvatarUrl(publicUrl + '?t=' + Date.now())
+    await refreshProfile()
+    setUploading(false)
   }
 
   async function onPasswordChange(values) {
@@ -106,23 +128,42 @@ export default function ProfilePage() {
           {/* Avatar + role banner */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 20, marginBottom: 28, padding: '20px 24px', borderRadius: 12, background: 'linear-gradient(135deg, #0A1628, #162340)', position: 'relative', overflow: 'hidden' }}>
             <div style={{ position: 'absolute', top: '-30%', right: '-5%', width: 200, height: 200, borderRadius: '50%', background: 'radial-gradient(circle,rgba(212,175,55,0.07) 0%,transparent 70%)' }} />
-            <div style={{
-              width: 72, height: 72, borderRadius: '50%', flexShrink: 0,
-              background: 'linear-gradient(135deg, #D4AF37, #B8942E)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: 26, fontWeight: 800, color: '#0A1628',
-              fontFamily: "'Poppins',sans-serif",
-              border: '3px solid rgba(212,175,55,0.3)',
-              boxShadow: '0 0 0 6px rgba(212,175,55,0.08)',
-            }}>
-              {getInitials(profile?.name)}
+
+            {/* Avatar with upload button */}
+            <div style={{ position: 'relative', flexShrink: 0 }}>
+              <div style={{
+                width: 80, height: 80, borderRadius: '50%',
+                background: avatarUrl ? 'transparent' : 'linear-gradient(135deg, #D4AF37, #B8942E)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: 28, fontWeight: 800, color: '#0A1628',
+                border: '3px solid rgba(212,175,55,0.4)',
+                boxShadow: '0 0 0 6px rgba(212,175,55,0.08)',
+                overflow: 'hidden',
+              }}>
+                {avatarUrl || profile?.avatar_url
+                  ? <img src={avatarUrl || profile?.avatar_url} alt={profile?.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  : getInitials(profile?.name)
+                }
+              </div>
+              <button
+                onClick={() => fileRef.current?.click()}
+                title="Upload photo"
+                style={{ position: 'absolute', bottom: 0, right: 0, width: 26, height: 26, borderRadius: '50%', background: '#D4AF37', border: '2px solid #0A1628', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+              >
+                <Camera size={13} color="#0A1628" />
+              </button>
+              <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleAvatarUpload} />
             </div>
+
             <div>
               <p style={{ color: '#fff', fontSize: 20, fontWeight: 800, fontFamily: "'Poppins',sans-serif", lineHeight: 1.2 }}>{profile?.name}</p>
               <p style={{ color: 'rgba(255,255,255,0.45)', fontSize: 13, marginTop: 4 }}>{profile?.email}</p>
               <span style={{ display: 'inline-block', marginTop: 8, padding: '3px 12px', borderRadius: 6, fontSize: 11, fontWeight: 700, background: rs.bg, color: rs.color, border: `1px solid ${rs.border}` }}>
                 {ROLE_LABELS[profile?.role] || profile?.role}
               </span>
+              {uploading && <p style={{ color: '#D4AF37', fontSize: 11, marginTop: 6 }}>Uploading photo…</p>}
+              {uploadError && <p style={{ color: '#FCA5A5', fontSize: 11, marginTop: 6 }}>{uploadError}</p>}
+              {!uploading && !uploadError && <p style={{ color: 'rgba(255,255,255,0.3)', fontSize: 11, marginTop: 6 }}>Click camera icon to update photo</p>}
             </div>
           </div>
 

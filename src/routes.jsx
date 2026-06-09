@@ -24,6 +24,8 @@ import AuditLogsPage from './pages/admin/AuditLogsPage'
 import UsersPage from './pages/admin/UsersPage'
 import FollowUpsPage from './pages/admin/FollowUpsPage'
 import ProfilePage from './pages/ProfilePage'
+import PrivacyPolicyPage from './pages/PrivacyPolicyPage'
+import ConsentMonitorPage from './pages/admin/ConsentMonitorPage'
 
 // All 5 active roles
 const ALL_ROLES = ['super_admin', 'supervisor', 'bpo_agent', 'auditor', 'accounts']
@@ -89,7 +91,9 @@ export default function AppRoutes() {
       <Route path="/users"         element={<Page component={UsersPage}        roles={['super_admin']} />} />
 
       {/* ── Account ── */}
-      <Route path="/profile" element={<Page component={ProfilePage} roles={ALL_ROLES} />} />
+      <Route path="/profile"         element={<Page component={ProfilePage}        roles={ALL_ROLES} />} />
+      <Route path="/privacy-policy"  element={<Page component={PrivacyPolicyPage}  roles={ALL_ROLES} />} />
+      <Route path="/consent-monitor" element={<Page component={ConsentMonitorPage} roles={['super_admin']} />} />
 
       {/* Catch-all */}
       <Route path="*" element={<RoleRedirect />} />

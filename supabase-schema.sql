@@ -279,3 +279,30 @@ create index if not exists idx_audit_logs_user on audit_logs(user_id);
 alter table users drop constraint if exists users_status_check;
 alter table users add constraint users_status_check
   check (status in ('active','inactive','suspended','banned'));
+
+-- ── Privacy Policy Consents ──────────────────────────────────
+create table if not exists policy_consents (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references users(id) on delete cascade,
+  policy_version text not null default 'v1.0',
+  consented_at timestamptz default now(),
+  ip_address text,
+  user_agent text,
+  signature text,
+  unique(user_id, policy_version)
+);
+
+alter table policy_consents enable row level security;
+
+-- Users can insert/view their own consent; super_admin sees all
+create policy "policy_consents_insert" on policy_consents
+  for insert with check (auth.uid() = user_id);
+
+create policy "policy_consents_select" on policy_consents
+  for select using (
+    auth.uid() = user_id or
+    (select role from users where id = auth.uid()) = 'super_admin'
+  );
+
+-- Profile picture storage bucket (run in Supabase Storage settings too)
+-- Storage bucket name: avatars (create manually in Supabase dashboard)

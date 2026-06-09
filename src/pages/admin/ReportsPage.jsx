@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useLocation } from 'react-router-dom'
 import { Download, RefreshCw, TrendingUp, BarChart3, FileText, Users, CreditCard, Calendar, PhoneCall, CheckCircle, CalendarRange, X } from 'lucide-react'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -23,7 +24,7 @@ const PIE_COLORS = [N, B, '#16A34A', G, '#0F766E', '#D97706', '#065F46']
 const REPORT_CONFIG = {
   super_admin: {
     title: 'Reports & Analytics',
-    subtitle: 'Full portal performance overview',
+    subtitle: 'Full portal performance overview — all modules',
     exports: [
       { key: 'leads',      label: 'Leads Report',      icon: Users,       color: N },
       { key: 'clients',    label: 'Clients Report',    icon: CheckCircle, color: '#16A34A' },
@@ -32,44 +33,51 @@ const REPORT_CONFIG = {
       { key: 'attendance', label: 'Attendance Report', icon: Calendar,    color: '#D97706' },
       { key: 'call_logs',  label: 'Call Logs Report',  icon: PhoneCall,   color: '#0F766E' },
     ],
-    charts: ['leads', 'revenue', 'calls', 'attendance', 'filings'],
+    charts: ['leads', 'revenue', 'calls', 'attendance', 'filings', 'paymentStatus'],
   },
   supervisor: {
     title: 'Team Reports',
-    subtitle: 'Agent performance & team analytics',
+    subtitle: 'Agent performance, leads, filings & attendance analytics',
     exports: [
-      { key: 'leads',      label: 'Leads Report',      icon: Users,     color: N },
-      { key: 'call_logs',  label: 'Call Logs',         icon: PhoneCall, color: B },
-      { key: 'attendance', label: 'Attendance Report', icon: Calendar,  color: '#D97706' },
+      { key: 'leads',      label: 'Leads Report',      icon: Users,       color: N },
+      { key: 'clients',    label: 'Clients Report',    icon: CheckCircle, color: '#16A34A' },
+      { key: 'call_logs',  label: 'Call Logs Report',  icon: PhoneCall,   color: B },
+      { key: 'filings',    label: 'Filings Report',    icon: FileText,    color: G },
+      { key: 'payments',   label: 'Payments Report',   icon: CreditCard,  color: '#0F766E' },
+      { key: 'attendance', label: 'Attendance Report', icon: Calendar,    color: '#D97706' },
     ],
-    charts: ['leads', 'calls', 'attendance'],
-  },
-  auditor: {
-    title: 'Filing Reports',
-    subtitle: 'Your ITR filing performance & analytics',
-    exports: [
-      { key: 'filings', label: 'My Filings', icon: FileText,    color: N },
-      { key: 'clients', label: 'My Clients', icon: CheckCircle, color: B },
-    ],
-    charts: ['filings'],
+    charts: ['leads', 'calls', 'attendance', 'filings', 'revenue'],
   },
   bpo_agent: {
     title: 'My Performance Reports',
-    subtitle: 'Your call & lead performance',
+    subtitle: 'Your personal call activity & lead conversion analytics',
     exports: [
       { key: 'call_logs', label: 'My Call Logs', icon: PhoneCall, color: N },
       { key: 'leads',     label: 'My Leads',     icon: Users,     color: B },
+      { key: 'attendance',label: 'My Attendance',icon: Calendar,  color: '#D97706' },
     ],
     charts: ['calls', 'leads'],
   },
+  auditor: {
+    title: 'Filing Reports',
+    subtitle: 'Your ITR filing status, client progress & performance',
+    exports: [
+      { key: 'filings',    label: 'My Filings Report',  icon: FileText,    color: N },
+      { key: 'clients',    label: 'My Clients Report',  icon: CheckCircle, color: B },
+      { key: 'attendance', label: 'My Attendance',      icon: Calendar,    color: '#D97706' },
+    ],
+    charts: ['filings'],
+  },
   accounts: {
     title: 'Financial Reports',
-    subtitle: 'Revenue, collections & payment analytics',
+    subtitle: 'Revenue collections, outstanding dues & payment analytics',
     exports: [
-      { key: 'payments', label: 'Revenue Report', icon: CreditCard,  color: N },
-      { key: 'clients',  label: 'Clients Report', icon: CheckCircle, color: B },
+      { key: 'payments',   label: 'Revenue Report',     icon: CreditCard,  color: N },
+      { key: 'clients',    label: 'Clients Report',     icon: CheckCircle, color: B },
+      { key: 'filings',    label: 'Filings Report',     icon: FileText,    color: G },
+      { key: 'attendance', label: 'My Attendance',      icon: Calendar,    color: '#D97706' },
     ],
-    charts: ['revenue', 'paymentStatus'],
+    charts: ['revenue', 'paymentStatus', 'filings'],
   },
 }
 
@@ -134,7 +142,16 @@ export default function ReportsPage() {
     if (period === 'custom' && customFrom && customTo) loadData()
   }, [customFrom, customTo])
 
-  const role = profile?.role || 'bpo_agent'
+  // Detect role from URL when no profile (dev testing mode)
+  const { pathname } = useLocation()
+  function getRoleFromPath(p) {
+    if (p.startsWith('/supervisor')) return 'supervisor'
+    if (p.startsWith('/agent'))      return 'bpo_agent'
+    if (p.startsWith('/auditor'))    return 'auditor'
+    if (p.startsWith('/accounts'))   return 'accounts'
+    return 'super_admin'
+  }
+  const role = profile?.role || getRoleFromPath(pathname)
   const config = REPORT_CONFIG[role] || REPORT_CONFIG.super_admin
 
   async function loadData(isRefresh = false) {
@@ -179,7 +196,7 @@ export default function ReportsPage() {
         f.summaryInterested = calls?.filter(c => c.interest_status === 'Interested').length || 0
       }
 
-      if (['super_admin', 'accounts'].includes(role)) {
+      if (['super_admin', 'accounts', 'supervisor'].includes(role)) {
         const { data: pay } = await supabase.from('payments').select('amount_paid, payment_date, payment_status, amount_due').gte('payment_date', sinceDate)
         const rm = {}; pay?.forEach(p => { if (p.payment_date) rm[p.payment_date] = (rm[p.payment_date] || 0) + (p.amount_paid || 0) })
         f.revenue = Object.entries(rm).sort().slice(-14).map(([date, revenue]) => ({ date: date.slice(5), revenue }))
@@ -189,18 +206,20 @@ export default function ReportsPage() {
         f.summaryDue     = pay?.reduce((s, p) => s + (p.amount_due || 0), 0) || 0
       }
 
-      if (['super_admin', 'auditor'].includes(role)) {
+      if (['super_admin', 'auditor', 'supervisor', 'accounts'].includes(role)) {
         let fq = supabase.from('filings').select('filing_status, created_at').gte('created_at', since)
-        if (role === 'auditor') fq = fq.eq('filing_completed_by', profile.id)
+        if (role === 'auditor') fq = fq.eq('filing_completed_by', profile?.id)
         const { data: fil } = await fq
         const fm = {}; fil?.forEach(f2 => { fm[f2.filing_status || 'Unknown'] = (fm[f2.filing_status || 'Unknown'] || 0) + 1 })
-        f.filings       = Object.entries(fm).map(([name, count]) => ({ name, count }))
+        f.filings        = Object.entries(fm).map(([name, count]) => ({ name, count }))
         f.summaryFilings = fil?.length || 0
         f.summaryFiled   = fil?.filter(x => ['Filed', 'Completed'].includes(x.filing_status)).length || 0
       }
 
-      if (['super_admin', 'supervisor'].includes(role)) {
-        const { data: att } = await supabase.from('attendance').select('date, working_hours').gte('date', sinceDate)
+      if (['super_admin', 'supervisor', 'bpo_agent', 'auditor', 'accounts'].includes(role)) {
+        let aq = supabase.from('attendance').select('date, working_hours, user_id').gte('date', sinceDate)
+        if (['bpo_agent', 'auditor', 'accounts'].includes(role)) aq = aq.eq('user_id', profile?.id)
+        const { data: att } = await aq
         const am = {}; att?.forEach(a => { am[a.date] = (am[a.date] || 0) + 1 })
         f.attendance          = Object.entries(am).sort().slice(-14).map(([date, count]) => ({ date: date.slice(5), count }))
         f.summaryAttCheckins  = att?.length || 0
@@ -241,22 +260,22 @@ export default function ReportsPage() {
   const tiles = []
   if (['super_admin', 'supervisor', 'bpo_agent'].includes(role)) {
     tiles.push(
-      { label: 'Total Leads', value: summary.summaryLeads,     icon: Users,       color: N,        bg: NB },
-      { label: 'Calls Made',  value: summary.summaryCalls,     icon: PhoneCall,   color: G,        bg: GB },
-      { label: 'Connected',   value: summary.summaryConnected, icon: CheckCircle, color: '#16A34A', bg: '#DCFCE7' },
-      { label: 'Interested',  value: summary.summaryInterested,icon: TrendingUp,  color: B,        bg: BB },
+      { label: 'Total Leads',  value: summary.summaryLeads,      icon: Users,       color: N,         bg: NB },
+      { label: 'Calls Made',   value: summary.summaryCalls,      icon: PhoneCall,   color: G,         bg: GB },
+      { label: 'Connected',    value: summary.summaryConnected,  icon: CheckCircle, color: '#16A34A', bg: '#DCFCE7' },
+      { label: 'Interested',   value: summary.summaryInterested, icon: TrendingUp,  color: B,         bg: BB },
     )
   }
-  if (['super_admin', 'accounts'].includes(role)) {
+  if (['super_admin', 'accounts', 'supervisor'].includes(role)) {
     tiles.push(
       { label: 'Revenue Collected', value: formatCurrency(summary.summaryRevenue), icon: CreditCard, color: '#16A34A', bg: '#DCFCE7' },
       { label: 'Outstanding Dues',  value: formatCurrency(summary.summaryDue),     icon: TrendingUp, color: '#DC2626', bg: '#FEE2E2' },
     )
   }
-  if (['super_admin', 'auditor'].includes(role)) {
+  if (['super_admin', 'auditor', 'supervisor', 'accounts'].includes(role)) {
     tiles.push(
-      { label: 'Total Filings',    value: summary.summaryFilings, icon: FileText,    color: N,        bg: NB },
-      { label: 'Filed/Completed',  value: summary.summaryFiled,   icon: CheckCircle, color: '#16A34A', bg: '#DCFCE7' },
+      { label: 'Total Filings',   value: summary.summaryFilings, icon: FileText,    color: N,         bg: NB },
+      { label: 'Filed/Completed', value: summary.summaryFiled,   icon: CheckCircle, color: '#16A34A', bg: '#DCFCE7' },
     )
   }
   if (['super_admin', 'supervisor'].includes(role)) {
